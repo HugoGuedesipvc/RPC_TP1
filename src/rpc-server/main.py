@@ -1,9 +1,9 @@
 import signal, sys
 from xmlrpc.server import SimpleXMLRPCServer
 from xmlrpc.server import SimpleXMLRPCRequestHandler
-
 from functions.string_length import string_length
 from functions.string_reverse import string_reverse
+
 
 
 class RequestHandler(SimpleXMLRPCRequestHandler):
@@ -35,4 +35,5 @@ with SimpleXMLRPCServer(('0.0.0.0', 9000), requestHandler=RequestHandler) as ser
 
     # start the server
     print("Starting the RPC Server...")
+    print("JOMS")
     server.serve_forever()
