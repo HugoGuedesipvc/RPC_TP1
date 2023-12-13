@@ -1,32 +1,28 @@
-import tempfile
-from csv_to_xml_converter import CSVtoXMLConverter
-from validacao import validar_xml_com_schema
+import os
+from xml_generation.csv_to_xml_converter import CSVtoXMLConverter
+from xml_generation.validacao import validar_xml_com_schema
+from lxml import etree
 
-def generate_and_validate_xml(csv_file="cars.csv"):
-
-    converter = CSVtoXMLConverter(csv_file)
-    xml_str = converter.to_xml_str()
-    print(xml_str)
-
-    with tempfile.NamedTemporaryFile(mode='w', delete=False) as temp_xml_file:
-        temp_xml_file.write(xml_str)
-        temp_xml_filename = temp_xml_file.name
-
+def generate_and_validate_xml(file_name, csv_path):
     try:
-        validar_xml_com_schema(temp_xml_filename, "schema.xsd")
-        print("O XML é válido de acordo com a XML Schema fornecida.")
-    finally:
-        import os
-        os.remove(temp_xml_filename)
+        # Chama a função para converter CSV para XML
+        converter = CSVtoXMLConverter(csv_path)
+        xml_str = converter.to_xml_str()
 
-    output_text_file = "output.txt"
-    with open(output_text_file, "w") as output_file:
-        output_file.write(xml_str)
+        # Validar XML
+        validar_xml_com_schema(xml_str)
 
-    print(f"O XML foi salvo em {output_text_file}")
+        save_path = "/src/rpc-base_dados/data"
 
-    return True
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
 
-if __name__ == "__main__":
-    generate_and_validate_xml()
+        xml_save_path = os.path.join(save_path, f"{file_name}.xml")
+        with open(xml_save_path, 'w') as xml_file:
+            xml_file.write(xml_str)
 
+        return xml_str
+
+    except Exception as e:
+        print(f"Erro durante a geração e validação do XML: {e}")
+        return None
