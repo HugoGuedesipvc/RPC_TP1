@@ -60,7 +60,13 @@ with SimpleXMLRPCServer(('0.0.0.0', 9000), requestHandler=RequestHandler, allow_
         except Exception as e:
             print(f"Erro na base de dados: {e}")
             return None
-
+    def list_csv():
+        try:
+            result = get_all_active_csv()
+            return result
+        except Exception as e:
+            print(f"Erro na base de dados: {e}")
+            return None
 
     # Função para excluir um documento XML na base de dados
     def eliminar_xml(id):
@@ -85,6 +91,7 @@ with SimpleXMLRPCServer(('0.0.0.0', 9000), requestHandler=RequestHandler, allow_
     server.register_function(list_xml)
     server.register_function(eliminar_xml)
     server.register_function(routinas_query)
+    server.register_function(list_csv)
     # Iniciar o servidor XML-RPC e aguardar por solicitações
     print("Starting the RPC Server...")
     print("JOMS")
