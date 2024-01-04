@@ -67,3 +67,38 @@ def get_all_active_xml():
     except (Exception, psycopg2.Error) as e:
         print(f"Erro ao obter os XML ativos: {e}")
         return []
+
+
+def insert_csv_data(file_name, csv_content, file_size):
+    try:
+        with psycopg2.connect(**db_params) as connection, connection.cursor() as cursor:
+            cursor.execute("SELECT id FROM public.converted_documents WHERE file_name = %s", (file_name,))
+            existing_record = cursor.fetchone()
+
+            if existing_record:
+                print(f"Registro com o file_name '{file_name}' já existe com ID: {existing_record[0]}")
+                cursor.execute(
+                    sql.SQL("UPDATE public.converted_documents SET csv = %s, file_size = %s WHERE id = %s"),
+                    (csv_content, file_size, existing_record[0]),
+                )
+                connection.commit()
+                return existing_record[0]
+            else:
+                cursor.execute(
+                    sql.SQL("INSERT INTO public.converted_documents (file_name, csv, file_size) VALUES (%s, %s, %s) RETURNING id"),
+                    (file_name, csv_content, file_size),
+                )
+                connection.commit()
+    except (Exception, psycopg2.Error) as e:
+        print(f"Erro ao inserir o CSV na tabela 'converted_documents': {e}")
+
+def get_all_active_csv():
+    try:
+        with psycopg2.connect(**db_params) as connection, connection.cursor() as cursor:
+            cursor.execute("SELECT file_name FROM public.converted_documents WHERE deleted_at IS NULL")
+            csv_data_list = cursor.fetchall()
+            return csv_data_list if csv_data_list else []
+    except (Exception, psycopg2.Error) as e:
+        print(f"Erro ao obter os CSV ativos: {e}")
+        return []
+

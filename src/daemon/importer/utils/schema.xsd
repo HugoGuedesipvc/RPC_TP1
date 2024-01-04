@@ -1,0 +1,81 @@
+<xs:schema attributeFormDefault="unqualified" elementFormDefault="qualified" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="Person">
+    <xs:complexType>
+      <xs:simpleContent>
+        <xs:extension base="xs:string">
+          <xs:attribute type="xs:int" name="id" use="optional"/>
+          <xs:attribute type="xs:string" name="first_name" use="optional"/>
+          <xs:attribute type="xs:string" name="last_name" use="optional"/>
+        </xs:extension>
+      </xs:simpleContent>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="Car">
+  <xs:complexType>
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute type="xs:int" name="id" use="optional"/>
+        <xs:attribute type="xs:string" name="brand" use="optional"/>
+        <xs:attribute type="xs:string" name="model" use="optional"/>
+        <xs:attribute type="xs:string" name="color" use="optional"/>
+        <xs:attribute type="xs:short" name="year_of_manufacture" use="optional"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+</xs:element>
+  <xs:element name="CreditCard">
+    <xs:complexType>
+      <xs:simpleContent>
+        <xs:extension base="xs:string">
+          <xs:attribute type="xs:int" name="id" use="optional"/>
+          <xs:attribute type="xs:string" name="card_type" use="optional"/>
+        </xs:extension>
+      </xs:simpleContent>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="Sales">
+    <xs:complexType mixed="true">
+      <xs:sequence>
+        <xs:element ref="Sales" maxOccurs="unbounded" minOccurs="0"/>
+      </xs:sequence>
+      <xs:attribute type="xs:int" name="id" use="optional"/>
+      <xs:attribute type="xs:string" name="country" use="optional"/>
+      <xs:attribute type="xs:string" name="person_id" use="optional"/>
+      <xs:attribute type="xs:string" name="car_id" use="optional"/>
+      <xs:attribute type="xs:string" name="credit_card_id" use="optional"/>
+      <xs:attribute type="xs:decimal" name="latitude" use="optional"/>
+      <xs:attribute type="xs:decimal" name="longitude" use="optional"/>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="Persons">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="Person" maxOccurs="unbounded" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="Cars">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="Car" maxOccurs="unbounded" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="CreditCards">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="CreditCard" maxOccurs="unbounded" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="Data">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="Persons"/>
+        <xs:element ref="Cars"/>
+        <xs:element ref="CreditCards"/>
+        <xs:element ref="Sales"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

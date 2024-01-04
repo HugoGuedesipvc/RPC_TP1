@@ -8,6 +8,32 @@ services:
     ports:
       - "5432:5432"
 
+  golang-watcher:
+    container_name: golang-watcher
+    build: docker/images/golang
+    volumes:
+      - ./src/watcher/golang:/usr/src/app
+      #- ./docker/volumes/xml:/xml
+    environment:
+      USE_DEV_MODE: ${USE_DEV_MODE}
+    depends_on:
+      - db
+
+  importer:
+    container_name: importer
+    build: docker/images/python
+    volumes:
+        - "./src/daemon/importer:/app"
+        - "./src/base_dados:/app/base_dados"
+        - "./docker/volumes/xml:/app/xml"
+        - "./docker/volumes/csv:/app/csv"
+
+    environment:
+      USE_DEV_MODE: ${USE_DEV_MODE}
+      NUM_XML_PARTS: ${NUM_XML_PARTS}
+    depends_on:
+      - db
+
   rpc-server:
     container_name: is-rpc-server
     build: docker/images/python
@@ -23,6 +49,18 @@ services:
       - "./src/rpc-client:/app"
     depends_on:
       - rpc-server
+
+  broker:
+    container_name: rabbitmq
+    image: "rabbitmq:3.12.9-management-alpine"
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "ping", "-q" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
 volumes:
   postgres_data:
