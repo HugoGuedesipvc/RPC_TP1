@@ -8,7 +8,17 @@ services:
     ports:
       - "5432:5432"
 
-  # Container that automatically converts CSV to XML and then imports the XML to db-xml
+  golang-watcher:
+    container_name: golang-watcher
+    build: docker/images/golang
+    volumes:
+      - ./src/watcher/golang:/usr/src/app
+      #- ./docker/volumes/xml:/xml
+    environment:
+      USE_DEV_MODE: ${USE_DEV_MODE}
+    depends_on:
+      - db
+
   importer:
     container_name: importer
     build: docker/images/python
