@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	_ "github.com/lib/pq"
+	"github.com/streadway/amqp"
 )
 
 var db_params = map[string]string{
@@ -103,7 +105,6 @@ func extractEntitiesFromXML(xmlData string) ([]Entity, error) {
 		return nil, fmt.Errorf("Erro ao decodificar XML: %v", err)
 	}
 
-	// Convertendo Person, Car, CreditCard e Sale para entidades
 	for _, person := range data.Persons {
 		entities = append(entities, person.ToEntity())
 	}
@@ -123,7 +124,13 @@ func extractEntitiesFromXML(xmlData string) ([]Entity, error) {
 	return entities, nil
 }
 
-func processXMLFiles(xmlList []string, db *sql.DB) {
+func processXMLFiles(xmlList []string, db *sql.DB, ch *amqp.Channel) {
+
+	wg.Add(1)
+	defer wg.Done()
+
+	var allEntities []Entity
+
 	for _, xmlData := range xmlList {
 		entities, err := extractEntitiesFromXML(xmlData)
 		if err != nil {
@@ -132,15 +139,43 @@ func processXMLFiles(xmlList []string, db *sql.DB) {
 		}
 
 		fmt.Println("Entidades extraídas do XML:")
-		for _, entity := range entities {
-			// Ajuste aqui para acessar os campos corretos (por exemplo, entity.ID, entity.Name, entity.CreatedOn)
-			fmt.Printf("ID: %d, Nome: %s\n", entity.ID, entity.Name)
-		}
+		allEntities = append(allEntities, entities...)
+	}
+
+
+	for _, entity := range allEntities {
+
+		fmt.Printf("ID: %d, Nome: %s\n", entity.ID, entity.Name)
 
 	}
+
 }
 
-func checkForNewFiles(db *sql.DB) {
+//func sendTaskMessage(ch *amqp.Channel, entity Entity) {
+
+	// messageType := "import"
+	// if strings.Contains(entity.Name, "geographic data") {
+	// 	messageType = "update"
+	// }
+
+	// messageBody := fmt.Sprintf(`{"type": "%s", "id": %d}`, messageType, entity.ID)
+
+	// err := ch.Publish(
+	// 	"exchange_name",
+	// 	"routing_key",
+	// 	false,
+	// 	false,
+	// 	amqp.Publishing{
+	// 		ContentType: "application/json",
+	// 		Body:        []byte(messageBody),
+	// 	},
+	// )
+	// if err != nil {
+	// 	log.Printf("Erro ao enviar mensagem para o RabbitMQ: %v\n", err)
+	// }
+//}
+
+func checkForNewFiles(db *sql.DB, ch *amqp.Channel) {
 	ticker := time.NewTicker(1 * time.Second)
 
 	var xmlList []string
@@ -148,7 +183,6 @@ func checkForNewFiles(db *sql.DB) {
 	for {
 		select {
 		case <-ticker.C:
-			// Consultar o banco de dados para obter os registros mais recentes
 			rows, err := db.Query("SELECT xml FROM imported_documents WHERE updated_on > $1", time.Now().Add(-5*time.Second))
 			if err != nil {
 				log.Printf("Erro ao consultar o banco de dados: %v\n", err)
@@ -156,7 +190,6 @@ func checkForNewFiles(db *sql.DB) {
 			}
 			defer rows.Close()
 
-			// Processar os resultados
 			for rows.Next() {
 				var xmlData string
 
@@ -166,19 +199,16 @@ func checkForNewFiles(db *sql.DB) {
 					continue
 				}
 
-				// Adicionar o XML à lista para processamento posterior
 				xmlList = append(xmlList, xmlData)
 			}
-
-			// Verificar se houve algum erro durante a iteração pelos resultados
 			err = rows.Err()
 			if err != nil {
 				log.Printf("Erro ao iterar pelos resultados: %v\n", err)
 			}
 
-			// Processar os XMLs coletados
+
 			if len(xmlList) > 0 {
-				processXMLFiles(xmlList, db)
+				processXMLFiles(xmlList, db, ch)
 				xmlList = nil
 			}
 		}
@@ -203,17 +233,75 @@ func connectDB() (*sql.DB, error) {
 	return db, nil
 }
 
+func failOnError(err error, msg string) {
+	if err != nil {
+		log.Fatalf("%s: %s", msg, err)
+	}
+}
+
+var rabbitMQChannel *amqp.Channel
+var wg sync.WaitGroup
+
 func main() {
+	log.Println("Aguardando RabbitMQ...")
+	time.Sleep(10 * time.Second)
+
+	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq/")
+	if err != nil {
+		fmt.Println("Failed Initializing Broker Connection")
+		panic(err)
+	}
+	ch, err := conn.Channel()
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer ch.Close()
+
+	q, err := ch.QueueDeclare(
+		"TestQueue",
+		false,
+		false,
+		false,
+		false,
+		nil,
+	)
+
+	fmt.Println(q)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	err = ch.Publish(
+		"",
+		"TestQueue",
+		false,
+		false,
+		amqp.Publishing{
+			ContentType: "text/plain",
+			Body:        []byte("Hello World"),
+		},
+	)
+
+	if err != nil {
+		fmt.Println(err)
+	}
+    fmt.Println("Successfully Published Message to Queue")
+
 	start()
-    fmt.Println("Verificando novos arquivos...")
+	fmt.Println("Verificando novos arquivos...")
 	db, err := connectDB()
 	if err != nil {
 		log.Fatal("Erro na conexão com o banco de dados:", err)
 	}
 	defer db.Close()
 
+	//go func() {
+	//	wg.Wait()
+	//	rabbitMQChannel.Close()
+	//}()
 
-	go checkForNewFiles(db)
+	//checkForNewFiles(db, rabbitMQChannel)
+
 
 	select {}
 }

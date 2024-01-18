@@ -50,5 +50,17 @@ services:
     depends_on:
       - rpc-server
 
+  broker:
+    container_name: rabbitmq
+    image: "rabbitmq:3.12.9-management-alpine"
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "ping", "-q" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
 volumes:
   postgres_data:
