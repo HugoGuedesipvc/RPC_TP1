@@ -125,11 +125,11 @@ func extractEntitiesFromXML(xmlData string) ([]Entity, error) {
 }
 
 func processXMLFiles(xmlList []string, db *sql.DB, ch *amqp.Channel) {
-	
-	wg.Add(1)
-	defer wg.Done() 
 
-	var allEntities []Entity 
+	wg.Add(1)
+	defer wg.Done()
+
+	var allEntities []Entity
 
 	for _, xmlData := range xmlList {
 		entities, err := extractEntitiesFromXML(xmlData)
@@ -139,12 +139,12 @@ func processXMLFiles(xmlList []string, db *sql.DB, ch *amqp.Channel) {
 		}
 
 		fmt.Println("Entidades extraídas do XML:")
-		allEntities = append(allEntities, entities...) 
+		allEntities = append(allEntities, entities...)
 	}
 
 
 	for _, entity := range allEntities {
-	
+
 		fmt.Printf("ID: %d, Nome: %s\n", entity.ID, entity.Name)
 
 	}
@@ -152,7 +152,7 @@ func processXMLFiles(xmlList []string, db *sql.DB, ch *amqp.Channel) {
 }
 
 //func sendTaskMessage(ch *amqp.Channel, entity Entity) {
-	
+
 	// messageType := "import"
 	// if strings.Contains(entity.Name, "geographic data") {
 	// 	messageType = "update"
@@ -161,8 +161,8 @@ func processXMLFiles(xmlList []string, db *sql.DB, ch *amqp.Channel) {
 	// messageBody := fmt.Sprintf(`{"type": "%s", "id": %d}`, messageType, entity.ID)
 
 	// err := ch.Publish(
-	// 	"exchange_name", 
-	// 	"routing_key",   
+	// 	"exchange_name",
+	// 	"routing_key",
 	// 	false,
 	// 	false,
 	// 	amqp.Publishing{
@@ -200,13 +200,13 @@ func checkForNewFiles(db *sql.DB, ch *amqp.Channel) {
 				}
 
 				xmlList = append(xmlList, xmlData)
-			}	
+			}
 			err = rows.Err()
 			if err != nil {
 				log.Printf("Erro ao iterar pelos resultados: %v\n", err)
 			}
 
-		
+
 			if len(xmlList) > 0 {
 				processXMLFiles(xmlList, db, ch)
 				xmlList = nil
