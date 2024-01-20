@@ -3,11 +3,11 @@ package main
 import (
 	"database/sql"
 	"encoding/xml"
+	"encoding/json"
 	"fmt"
 	"log"
-	"strings"
-	"sync"
 	"time"
+	"reflect"
 
 	_ "github.com/lib/pq"
 	"github.com/streadway/amqp"
@@ -21,198 +21,160 @@ var db_params = map[string]string{
 	"port":     "5432",
 }
 
-type Entity struct {
-	ID   int    `xml:"id,attr"`
-	Name string `xml:"name,attr"`
+type Data struct {
+	XMLName     xml.Name      `xml:"Data"`
+	Persons     []Person      `xml:"Persons>Person"`
+	Cars        []Car         `xml:"Cars>Car"`
+	CreditCards []CreditCard  `xml:"CreditCards>CreditCard"`
+	Sales       []Sale        `xml:"Sales>Sales"`
 }
 
 type Person struct {
-	Entity
+	ID        int    `xml:"id,attr"`
 	FirstName string `xml:"first_name,attr"`
 	LastName  string `xml:"last_name,attr"`
 }
 
-func (p Person) ToEntity() Entity {
-	return Entity{
-		ID:   p.ID,
-		Name: fmt.Sprintf("Person ID: %d, first_name: %s, last_name: %s", p.ID, p.FirstName, p.LastName),
-	}
-}
-
 type Car struct {
-	Entity
+	ID                int    `xml:"id,attr"`
 	Brand             string `xml:"brand,attr"`
 	Model             string `xml:"model,attr"`
 	Color             string `xml:"color,attr"`
 	YearOfManufacture int    `xml:"year_of_manufacture,attr"`
 }
 
-func (c Car) ToEntity() Entity {
-	return Entity{
-		ID:   c.ID,
-		Name: fmt.Sprintf("Car ID: %d, brand: %s, model: %s, color: %s, year_of_manufacture: %d", c.ID, c.Brand, c.Model, c.Color, c.YearOfManufacture),
-	}
-}
-
 type CreditCard struct {
-	Entity
+	ID       int    `xml:"id,attr"`
 	CardType string `xml:"card_type,attr"`
 }
 
-func (cc CreditCard) ToEntity() Entity {
-	return Entity{
-		ID:   cc.ID,
-		Name: fmt.Sprintf("CreditCard ID: %d, card_type: %s", cc.ID, cc.CardType),
-	}
-}
-
 type Sale struct {
-	Entity
-	Country      string `xml:"country,attr"`
-	PersonID     string `xml:"person_id,attr"`
-	CarID        string `xml:"car_id,attr"`
-	CreditCardID string `xml:"credit_card_id,attr"`
-	Latitude     string `xml:"latitude,attr"`
-	Longitude    string `xml:"longitude,attr"`
+	ID            int    `xml:"id,attr"`
+	Country       string `xml:"country,attr"`
+	PersonID      string `xml:"person_id,attr"`
+	CarID         string `xml:"car_id,attr"`
+	CreditCardID  string `xml:"credit_card_id,attr"`
+	Latitude      string `xml:"latitude,attr"`
+	Longitude     string `xml:"longitude,attr"`
 }
 
-func (s Sale) ToEntity() Entity {
-	return Entity{
-		ID:   s.ID,
-		Name: fmt.Sprintf("Sale ID: %d, Country: %s", s.ID, s.Country),
-	}
+func loadDataFromXML(xmlData string) (Data, error) {
+    var data Data
+    err := xml.Unmarshal([]byte(xmlData), &data)
+    if err != nil {
+        return Data{}, err
+    }
+    return data, nil
 }
 
-func start() {
-	fmt.Println("A Iniciar")
-}
-
-func extractEntitiesFromXML(xmlData string) ([]Entity, error) {
-	var entities []Entity
-
-	type Data struct {
-		Persons     []Person     `xml:"Persons>Person"`
-		Cars        []Car        `xml:"Cars>Car"`
-		CreditCards []CreditCard `xml:"CreditCards>CreditCard"`
-		Sales       []Sale       `xml:"Sales>Sales"`
-	}
-
-	var data Data
-
-	decoder := xml.NewDecoder(strings.NewReader(xmlData))
-	err := decoder.Decode(&data)
-	if err != nil {
-		return nil, fmt.Errorf("Erro ao decodificar XML: %v", err)
-	}
-
-	for _, person := range data.Persons {
-		entities = append(entities, person.ToEntity())
-	}
-
-	for _, car := range data.Cars {
-		entities = append(entities, car.ToEntity())
-	}
-
-	for _, creditCard := range data.CreditCards {
-		entities = append(entities, creditCard.ToEntity())
-	}
-
-	for _, sale := range data.Sales {
-		entities = append(entities, sale.ToEntity())
-	}
-
-	return entities, nil
-}
-
-func processXMLFiles(xmlList []string, db *sql.DB, ch *amqp.Channel) {
-
-	wg.Add(1)
-	defer wg.Done()
-
-	var allEntities []Entity
-
-	for _, xmlData := range xmlList {
-		entities, err := extractEntitiesFromXML(xmlData)
+func publishEntities(ch *amqp.Channel, entityType string, entities []interface{}) {
+	for _, entity := range entities {
+		err := publishEntity(ch, entityType, entity)
 		if err != nil {
-			log.Printf("Erro ao extrair entidades do XML: %v\n", err)
-			continue
+			fmt.Printf("Erro ao publicar %s: %v\n", entityType, err)
 		}
-
-		fmt.Println("Entidades extraídas do XML:")
-		allEntities = append(allEntities, entities...)
 	}
-
-
-	for _, entity := range allEntities {
-
-		fmt.Printf("ID: %d, Nome: %s\n", entity.ID, entity.Name)
-
-	}
-
 }
 
-//func sendTaskMessage(ch *amqp.Channel, entity Entity) {
+func printQueueInfo(ch *amqp.Channel, queueName string) {
+	queueInfo, err := ch.QueueInspect(queueName)
+	if err != nil {
+		fmt.Printf("Erro ao obter informações sobre a fila %s: %v\n", queueName, err)
+	} else {
+		fmt.Printf("Informações sobre a fila %s:\n%+v\n", queueName, queueInfo)
+	}
+}
 
-	// messageType := "import"
-	// if strings.Contains(entity.Name, "geographic data") {
-	// 	messageType = "update"
-	// }
+func publishEntity(ch *amqp.Channel, entityType string, entity interface{}) error {
+	messageBody, err := json.Marshal(entity)
+	if err != nil {
+		return err
+	}
 
-	// messageBody := fmt.Sprintf(`{"type": "%s", "id": %d}`, messageType, entity.ID)
+	err = ch.Publish(
+		"",
+		entityType,
+		false,
+		false,
+		amqp.Publishing{
+			ContentType: "application/json",
+			Body:        messageBody,
+		},
+	)
+	return err
+}
 
-	// err := ch.Publish(
-	// 	"exchange_name",
-	// 	"routing_key",
-	// 	false,
-	// 	false,
-	// 	amqp.Publishing{
-	// 		ContentType: "application/json",
-	// 		Body:        []byte(messageBody),
-	// 	},
-	// )
-	// if err != nil {
-	// 	log.Printf("Erro ao enviar mensagem para o RabbitMQ: %v\n", err)
-	// }
-//}
+func declareQueues(ch *amqp.Channel) {
+	queues := []string{
+		"import-entity-queue",
+		"update-geographic-data-queue",
+	}
 
-func checkForNewFiles(db *sql.DB, ch *amqp.Channel) {
-	ticker := time.NewTicker(1 * time.Second)
-
-	var xmlList []string
-
-	for {
-		select {
-		case <-ticker.C:
-			rows, err := db.Query("SELECT xml FROM imported_documents WHERE updated_on > $1", time.Now().Add(-5*time.Second))
-			if err != nil {
-				log.Printf("Erro ao consultar o banco de dados: %v\n", err)
-				continue
-			}
-			defer rows.Close()
-
-			for rows.Next() {
-				var xmlData string
-
-				err := rows.Scan(&xmlData)
-				if err != nil {
-					log.Printf("Erro ao escanear linha: %v\n", err)
-					continue
-				}
-
-				xmlList = append(xmlList, xmlData)
-			}
-			err = rows.Err()
-			if err != nil {
-				log.Printf("Erro ao iterar pelos resultados: %v\n", err)
-			}
-
-
-			if len(xmlList) > 0 {
-				processXMLFiles(xmlList, db, ch)
-				xmlList = nil
-			}
+	for _, queueName := range queues {
+		err := declareQueue(ch, queueName)
+		if err != nil {
+			fmt.Printf("Erro ao declarar a fila %s: %v\n", queueName, err)
 		}
 	}
+}
+
+func declareQueue(ch *amqp.Channel, queueName string) error {
+	_, err := ch.QueueDeclare(
+		queueName,
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+	return err
+}
+
+func interfaceSlice(slice interface{}) []interface{} {
+	s := reflect.ValueOf(slice)
+	if s.Kind() != reflect.Slice {
+		panic("interfaceSlice() given a non-slice type")
+	}
+
+	var result []interface{}
+	for i := 0; i < s.Len(); i++ {
+		result = append(result, s.Index(i).Interface())
+	}
+
+	return result
+}
+
+func main() {
+	log.Println("Aguardando RabbitMQ...JOMS16")
+	time.Sleep(10 * time.Second)
+
+	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq/")
+	if err != nil {
+		fmt.Println("Erro ao inicializar a conexão com o RabbitMQ")
+		panic(err)
+	}
+	defer conn.Close()
+
+	ch, err := conn.Channel()
+	if err != nil {
+		fmt.Println("Erro ao criar o canal RabbitMQ")
+		panic(err)
+	}
+	defer ch.Close()
+
+	db, err := connectDB()
+	if err != nil {
+		log.Fatal("Erro na conexão com o banco de dados:", err)
+	}
+
+	fmt.Println("Verificando novos arquivos...")
+
+	declareQueues(ch)
+
+	go checkForNewFiles(db,ch)
+
+	select {}
+
 }
 
 func connectDB() (*sql.DB, error) {
@@ -239,69 +201,62 @@ func failOnError(err error, msg string) {
 	}
 }
 
-var rabbitMQChannel *amqp.Channel
-var wg sync.WaitGroup
+func checkForNewFiles(db *sql.DB, ch *amqp.Channel) {
+    ticker := time.NewTicker(1 * time.Second)
 
-func main() {
-	log.Println("Aguardando RabbitMQ...")
-	time.Sleep(10 * time.Second)
+    var xmlList []string
 
-	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq/")
-	if err != nil {
-		fmt.Println("Failed Initializing Broker Connection")
-		panic(err)
-	}
-	ch, err := conn.Channel()
-	if err != nil {
-		fmt.Println(err)
-	}
-	defer ch.Close()
+    for {
+        select {
+        case <-ticker.C:
+            rows, err := db.Query("SELECT xml FROM imported_documents WHERE updated_on > $1", time.Now().Add(-5*time.Second))
+            if err != nil {
+                log.Printf("Erro ao consultar o banco de dados: %v\n", err)
+                continue
+            }
+            defer rows.Close()
 
-	q, err := ch.QueueDeclare(
-		"TestQueue",
-		false,
-		false,
-		false,
-		false,
-		nil,
-	)
+            for rows.Next() {
+                var xmlData string
 
-	fmt.Println(q)
-	if err != nil {
-		fmt.Println(err)
-	}
+                err := rows.Scan(&xmlData)
+                if err != nil {
+                    log.Printf("Erro ao escanear linha: %v\n", err)
+                    continue
+                }
 
-	err = ch.Publish(
-		"",
-		"TestQueue",
-		false,
-		false,
-		amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        []byte("Hello World"),
-		},
-	)
+                xmlList = append(xmlList, xmlData)
+            }
+            err = rows.Err()
+            if err != nil {
+                log.Printf("Erro ao iterar pelos resultados: %v\n", err)
+            }
 
-	if err != nil {
-		fmt.Println(err)
-	}
-    fmt.Println("Successfully Published Message to Queue")
+            if len(xmlList) > 0 {
+                processXMLFiles(xmlList, db, ch)
+                xmlList = nil
+            }
+        }
+    }
+}
 
-	start()
-	fmt.Println("Verificando novos arquivos...")
-	db, err := connectDB()
-	if err != nil {
-		log.Fatal("Erro na conexão com o banco de dados:", err)
-	}
-	defer db.Close()
+func processXMLFiles(xmlList []string, db *sql.DB, ch *amqp.Channel) {
+    for _, xmlData := range xmlList {
+        data, err := loadDataFromXML(xmlData)
+        if err != nil {
+            log.Printf("Erro ao carregar dados do XML: %v\n", err)
+            continue
+        }
 
-	//go func() {
-	//	wg.Wait()
-	//	rabbitMQChannel.Close()
-	//}()
+        fmt.Println("Entidades publicadas no RabbitMQ")
 
-	//checkForNewFiles(db, rabbitMQChannel)
+        publishEntities(ch, "update-geographic-data-queue", interfaceSlice(data.Sales))
+        publishEntities(ch, "import-entity-queue", interfaceSlice(data.Persons))
+        publishEntities(ch, "import-entity-queue", interfaceSlice(data.Cars))
+        publishEntities(ch, "import-entity-queue", interfaceSlice(data.CreditCards))
+        publishEntities(ch, "import-entity-queue", interfaceSlice(data.Sales))
+    }
 
-
-	select {}
+    printQueueInfo(ch, "import-entity-queue")
+    printQueueInfo(ch, "update-geographic-data-queue")
 }
