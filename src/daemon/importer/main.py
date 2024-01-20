@@ -3,6 +3,8 @@ import uuid
 import csv
 import math
 import os
+import tempfile
+import pandas as pd
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileCreatedEvent
 from base_dados.bd import insert_xml_data, get_all_active_csv, insert_csv_data
@@ -10,43 +12,36 @@ from base_dados.bd import insert_xml_data, get_all_active_csv, insert_csv_data
 from utils.csv_to_xml_converter import CSVtoXMLConverter
 from utils.xml_process import generate_and_validate_xml
 
-NUM_XML_PARTS_str = os.getenv("NUM_XML_PARTS", "3")
+NUM_XML_PARTS_str = os.getenv("NUM_XML_PARTS", "6")
 
 if not NUM_XML_PARTS_str:
-    NUM_XML_PARTS_str = "3"
+    NUM_XML_PARTS_str = "6"
 
 NUM_XML_PARTS = int(NUM_XML_PARTS_str)
 
 CSV_INPUT_PATH = "/csv"
 XML_OUTPUT_PATH = "/xml"
 
-def split_csv(file_path, num_parts):
-    with open(file_path, 'r') as csv_file:
-        csv_reader = csv.reader(csv_file)
-        header = next(csv_reader)
-        total_rows = sum(1 for row in csv_reader)
+def split_csv(csv_path, num_parts):
+    # Carregar o arquivo CSV
+    df = pd.read_csv(csv_path)
 
-    rows_per_part = int(math.ceil(total_rows / num_parts))
+    # Calcular o número de linhas em cada parte
+    rows_per_part = len(df) // num_parts
 
-    with open(file_path, 'r') as csv_file:
-        csv_reader = csv.reader(csv_file)
-        next(csv_reader)
+    # Dividir o DataFrame em várias partes
+    parts = []
+    for i in range(num_parts):
+        start = i * rows_per_part
+        end = (i + 1) * rows_per_part if i < num_parts - 1 else None
+        part_df = df.iloc[start:end]
+        
+        # Salvar cada parte como um novo arquivo CSV temporário
+        temp_file = tempfile.NamedTemporaryFile(delete=False)
+        part_df.to_csv(temp_file.name, index=False)
+        parts.append(temp_file.name)
 
-        for part_num in range(num_parts):
-            part_rows = []
-            for _ in range(rows_per_part):
-                try:
-                    part_rows.append(next(csv_reader))
-                except StopIteration:
-                    break
-
-            part_file_path = f"{file_path}_part{part_num + 1}.csv"
-            with open(part_file_path, 'w', newline='') as part_file:
-                csv_writer = csv.writer(part_file)
-                csv_writer.writerow(header)
-                csv_writer.writerows(part_rows)
-
-            yield part_file_path
+    return parts
 
 def store_csv(csv_path):
     try:
@@ -75,7 +70,7 @@ def store_xml(xml_path, xml_data):
         print(f"Erro durante a inserção no banco de dados para XML: {e}")
 
 def generate_unique_file_name(directory, extension):
-    return f"{directory}/{str(uuid.uuid4())[:8]}.{extension}"
+    return f"{directory}/{str(uuid.uuid4())[:4]}.{extension}"
 
 
 def convert_csv_to_xml(in_path, out_path):
@@ -122,20 +117,22 @@ class CSVHandler(FileSystemEventHandler):
 
         print(f"Starting splitting for CSV: {csv_path} into {NUM_XML_PARTS} parts")
 
-        for part_num in range(NUM_XML_PARTS):
-            print(f"Starting conversion for CSV part: {part_num + 1}")
-            xml_path = generate_unique_file_name(XML_OUTPUT_PATH, "xml")
+        temp_files = split_csv(csv_path, NUM_XML_PARTS)
 
-            converted_path = convert_csv_to_xml(csv_path, xml_path)
+        for part_num, part_csv_path in enumerate(temp_files, start=1):
+            print(f"Starting conversion for CSV part: {part_csv_path}")
 
-            if converted_path:
-                print(f"New XML file generated: '{converted_path}'")
+            xml_path = convert_csv_to_xml(part_csv_path, generate_unique_file_name(XML_OUTPUT_PATH, "xml"))
 
-                with open(converted_path, 'r') as xml_file:
-                    xml_data = xml_file.read()
+            print(f"New XML file generated: '{xml_path}'")
 
-                store_xml(converted_path, xml_data)
-                print(f"Conversion completed for CSV part: {part_num + 1}")
+            with open(xml_path, 'r') as xml_file:
+                xml_data = xml_file.read()
+
+            store_xml(xml_path, xml_data)
+            print(f"Conversion completed for CSV part: {part_csv_path}")
+
+            os.remove(part_csv_path)
 
 
 if __name__ == "__main__":
