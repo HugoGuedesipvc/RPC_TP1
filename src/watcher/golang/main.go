@@ -145,7 +145,8 @@ func interfaceSlice(slice interface{}) []interface{} {
 }
 
 func main() {
-	log.Println("Aguardando RabbitMQ...JOMS16")
+	log.Println("Aguardar RabbitMQ ")
+	
 	time.Sleep(10 * time.Second)
 
 	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq/")

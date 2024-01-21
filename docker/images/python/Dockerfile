@@ -15,6 +15,7 @@ RUN apk add g++
 
 # upgrade pip
 RUN python -m pip install --upgrade pip
+RUN pip install django
 RUN pip install lxml
 RUN pip install psycopg2-binary
 RUN pip install requests

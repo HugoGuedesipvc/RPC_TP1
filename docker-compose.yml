@@ -8,6 +8,29 @@ services:
     ports:
       - "5432:5432"
 
+    api-entities:
+    container_name: api-entities
+    build: docker/images/javascript
+    volumes:
+      - ./src/api/entities:/usr/src/app
+      - ./docker/volumes/xml:/xml
+    ports:
+      - "20001:3000"
+    environment:
+      USE_DEV_MODE: ${USE_DEV_MODE}
+      DATABASE_URL: postgresql://is:is@db-rel:5432/is?schema=public 
+
+    golang-migrator:
+    container_name: golang-migrator
+    build: docker/images/golang
+    volumes:
+      - ./src/migrator/golang:/usr/src/app
+      #- ./docker/volumes/xml:/xml
+    environment:
+      USE_DEV_MODE: ${USE_DEV_MODE}
+    depends_on:
+      - golang-watcher
+
   golang-watcher:
     container_name: golang-watcher
     build: docker/images/golang
@@ -61,6 +84,32 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
+
+  api-proc:
+    container_name: api-proc
+    build: docker/images/python
+    volumes:
+      - ./src/api/proc/app:/app
+      #- ./docker/volumes/xml:/xml
+    ports:
+      - "8090:8091"
+    environment:
+      API_PORT: 8091
+
+  # frontend-proc:
+  #   container_name: frontend-proc
+  #   build: docker/images/web
+  #   volumes:
+  #     - ./src/frontend/proc:/usr/src/app
+  #     - ./src/frontend/_shared/components:/usr/src/app/components
+  #     - ./src/frontend/_shared/public:/usr/src/app/public
+  #   ports:
+  #     - "8092:8093"
+  #   environment:
+  #     USE_DEV_MODE: ${USE_DEV_MODE}
+  #     API_PROC_URL: "localhost:8091"
+  #   depends_on:
+  #     - api-proc
 
 volumes:
   postgres_data:
