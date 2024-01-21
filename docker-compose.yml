@@ -62,5 +62,31 @@ services:
       timeout: 10s
       retries: 5
 
+  api-proc:
+    container_name: api-proc
+    build: docker/images/python
+    volumes:
+      - ./src/api/proc/app:/app
+      #- ./docker/volumes/xml:/xml
+    ports:
+      - "8090:8091"
+    environment:
+      API_PORT: 8091
+
+  frontend-proc:
+    container_name: frontend-proc
+    build: docker/images/web
+    volumes:
+      - ./src/frontend/proc:/usr/src/app
+      - ./src/frontend/_shared/components:/usr/src/app/components
+      - ./src/frontend/_shared/public:/usr/src/app/public
+    ports:
+      - "8092:8093"
+    environment:
+      USE_DEV_MODE: ${USE_DEV_MODE}
+      API_PROC_URL: "localhost:8091"
+    depends_on:
+      - api-proc
+
 volumes:
   postgres_data:
