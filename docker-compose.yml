@@ -8,7 +8,7 @@ services:
     ports:
       - "5432:5432"
 
-    api-entities:
+  api-entities:
     container_name: api-entities
     build: docker/images/javascript
     volumes:
@@ -20,7 +20,7 @@ services:
       USE_DEV_MODE: ${USE_DEV_MODE}
       DATABASE_URL: postgresql://is:is@db-rel:5432/is?schema=public 
 
-    golang-migrator:
+  golang-migrator:
     container_name: golang-migrator
     build: docker/images/golang
     volumes:
