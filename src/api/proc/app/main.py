@@ -1,4 +1,4 @@
-# main (dentro do diretório proc)
+
 import sys
 from flask import Flask, jsonify, request
 import xmlrpc.client
@@ -12,14 +12,13 @@ app.config["DEBUG"] = True
 def home():
     return 'Test ligação'
 
-# Endpoint para chamar a função list_xml
 @app.route('/api/list-xml/', methods=['GET', 'POST'])
 def list_xml_endpoint():
     if request.method == 'GET' or request.method == 'POST':
         params = {
         }
 
-        rpc_server_url = "http://localhost:9000/RPC2"
+        rpc_server_url = "http://is-rpc-server:9000/RPC2"
         proxy = xmlrpc.client.ServerProxy(rpc_server_url)
 
         try:
@@ -38,7 +37,7 @@ def routinas_query_endpoint():
             "atributo": "valor",
         }
 
-        rpc_server_url = "http://localhost:9000/RPC2"
+        rpc_server_url = "http://is-rpc-server:9000/RPC2"
         proxy = xmlrpc.client.ServerProxy(rpc_server_url)
 
         try:

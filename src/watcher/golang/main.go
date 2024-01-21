@@ -145,7 +145,7 @@ func interfaceSlice(slice interface{}) []interface{} {
 }
 
 func main() {
-	log.Println("Aguardando RabbitMQ...JOMS")
+	log.Println("Aguardar RabbitMQ ")
 	
 	time.Sleep(10 * time.Second)
 
